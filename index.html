@@ -192,6 +192,10 @@ figcaption button { padding:6px 10px; font-size:12px }
 <fieldset><legend>앞뒷면 배경색</legend><div class="color-control"><input id="paper" type="color" aria-label="앞뒷면 배경색" value="#14110f"><output id="hex" for="paper">#14110F</output><button id="reset" type="button">기본색</button></div></fieldset>
 <fieldset><legend>뒷면 표기 언어</legend><div class="segment" aria-label="뒷면 표기 언어"><button type="button" data-language="ko" aria-pressed="true">국문</button><button type="button" data-language="en" aria-pressed="false">English</button></div></fieldset>
 <fieldset><legend>글씨체</legend><label class="font-picker">상호명<select id="shop-font"></select></label><label class="font-picker">정보<select id="info-font"></select></label><p class="note">영문 서체를 고르면 한글은 나눔손글씨 붓으로 표시됩니다.</p></fieldset>
+<fieldset><legend>개별 글자 크기</legend>
+<label class="font-picker">조절 항목<select id="text-target"></select></label>
+<div class="qr-scale"><label for="text-scale">글자 크기</label><input id="text-scale" type="range" min="50" max="180" step="1" value="100"><output id="text-percent" for="text-scale">100%</output></div>
+<button id="reset-text-size" type="button">이 항목 기본 크기</button></fieldset>
 <fieldset><legend>매장 정보</legend><div id="info-controls"></div><p class="note">↑·↓로 카드에 표시될 순서를 바꿀 수 있습니다.</p></fieldset>
 <fieldset><legend>QR 코드</legend><div id="qr-controls"></div><div class="qr-scale"><label for="qr-scale">QR 크기</label><input id="qr-scale" type="range" min="65" max="120" step="1" value="100"><output id="qr-scale-value" for="qr-scale">100%</output></div><p class="note">인스타그램 ID 또는 주소와 블로그 주소를 입력하면 QR이 만들어집니다.</p></fieldset>
 </aside>
