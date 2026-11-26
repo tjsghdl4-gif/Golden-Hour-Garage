@@ -34,7 +34,7 @@ pageSharing.querySelector("button").addEventListener("click", async () => {
 if (!/^https?:$/.test(pageAddress.protocol)) pageSharing.hidden = true;
 
 async function fetchResource(path) {
-  const response = await fetch(path);
+  const response = await fetch(path, path.endsWith("export-template.txt") ? {cache:"no-cache"} : {});
   if (!response.ok) throw new Error(path);
   return response;
 }
