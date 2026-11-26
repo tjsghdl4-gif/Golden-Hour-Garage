@@ -35,6 +35,8 @@ const initial = {
   design:"engraved",
   language:"ko",
   qrScale:100,
+  logoScale:100,
+  phoneGap:null,
   fonts:{shop:"CardSatisfy",info:"CardBrush"},
   positions:{},
   textSizes:Object.fromEntries(textTargets.map(([id])=>[id,100])),
@@ -47,6 +49,8 @@ const published=JSON.parse(document.getElementById("published-settings").textCon
 const storageKey = "golden-hour-garage-editor-v1"+(published.version ? "-"+published.version : "");
 function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
+  if (Number.isInteger(saved?.logoScale) && saved.logoScale>=40 && saved.logoScale<=110) state.logoScale=saved.logoScale;
+  if (Number.isInteger(saved?.phoneGap) && saved.phoneGap>=0 && saved.phoneGap<=180) state.phoneGap=saved.phoneGap;
   for (const [id] of textTargets) {
     const value=saved?.textSizes?.[id];
     if (Number.isInteger(value) && value>=50 && value<=180) state.textSizes[id]=value;
@@ -145,6 +149,7 @@ function buildInputs() {
     toggle.addEventListener("change", () => {
       value.enabled = toggle.checked;
       input.disabled = !value.enabled;
+      updateSizeVisibility();
       refresh();
     });
     input.addEventListener("input", () => {
@@ -268,7 +273,18 @@ function infoRowsAtScale(items,factor,custom) {
     const labelSize=Math.round(Math.max(19,Math.round(base*.96))*labelScale);
     const font=`400 ${size}px ${fontStack(field.id==="shop"?"shop":"info")}`;
     back.font=font;
-    const x=hero?96:267;
+    let x=hero?96:267;
+    if (field.id==="phone") {
+      back.font=`400 ${labelSize}px ${fontStack("info")}`;
+      const titleWidth=Math.min(159,Math.ceil(back.measureText(cardLabel(field)).width));
+      const gap=state.phoneGap ?? (171-titleWidth);
+      x=96+titleWidth+gap;
+      if (custom) {
+        byId("phone-gap").value=gap;
+        byId("phone-gap-value").value=gap+" px";
+      }
+      back.font=font;
+    }
     const placeholder=state.language==="en" ? (field.englishPlaceholder || field.english) : field.placeholder;
     const lines=lineWrap(back,value||placeholder,703-x);
     const step=Math.ceil(base*1.23*scale);
@@ -350,7 +366,8 @@ function drawQRs(items,theme) {
     back.save();
     back.font=`400 ${labelSize(field)}px ${fontStack("info")}`;
     const labelHeight=labelSize(field)+7;
-    const width=Math.max(size,Math.ceil(back.measureText("< "+cardLabel(field)+" >").width));
+    const maxWidth=dividedLayout?W-dividerX-12:W;
+    const width=Math.min(maxWidth,Math.max(size,Math.ceil(back.measureText("< "+cardLabel(field)+" >").width)));
     placeItem(field.id,Math.round(centre-width/2),y,width,size+labelHeight+7);
     let code=null,error=false;
     const input=byId("value-"+field.id);
@@ -391,7 +408,7 @@ function drawQRs(items,theme) {
     back.font=`400 ${labelSize(field)}px ${fontStack("info")}`;
     back.textAlign="center";
     back.textBaseline="top";
-    back.fillText("< "+cardLabel(field)+" >",centre,y+size+8);
+    back.fillText("< "+cardLabel(field)+" >",centre,y+size+8,width);
     back.restore();
     y+=size+labelHeight+gap;
   }
@@ -427,23 +444,25 @@ function refresh() {
   const color=state.colors[state.design];
   const base=paper(state.design,color);
   front.drawImage(base,0,0);
-  front.drawImage(pictures[state.design].art,0,0);
+  const scale=state.logoScale/100;
+  front.drawImage(pictures[state.design].art,W*(1-scale)/2,H*(1-scale)/2,W*scale,H*scale);
   back.drawImage(base,0,0);
   const theme=colors(color);
   const info=state.infoOrder.filter(id=>state.fields[id].enabled).map(id=>fieldById[id]);
   const links=fields.filter(f=>f.qr&&state.fields[f.id].enabled);
-  if (info.length && links.length) {
-    back.save();
-    back.globalAlpha=.35;
-    back.fillStyle=theme.accent;
-    back.fillRect(752,105,2,451);
-    back.restore();
-  }
+  dividedLayout=Boolean(info.length && links.length);
   for(const f of fields.filter(f=>f.qr)) byId("value-"+f.id).setAttribute("aria-invalid","false");
   hitBoxes.clear();
   const notes=drawQRs(links,theme);
   if(!drawInfo(info,theme)) notes.push("왼쪽 정보가 길어요. 내용을 줄이면 명함 안에 모두 들어갑니다.");
   drawServices(theme);
+  if (dividedLayout) {
+    back.save();
+    back.globalAlpha=.72;
+    back.fillStyle=theme.accent;
+    back.fillRect(dividerX,105,4,451);
+    back.restore();
+  }
   if(links.some(f=>!state.fields[f.id].text.trim())) notes.push("주소를 입력한 QR만 스캔할 수 있습니다.");
   status.textContent=notes.join(" ");
 }
@@ -490,7 +509,7 @@ function save(side) {
 async function savePublishedEditor() {
   const copy=document.documentElement.cloneNode(true);
   copy.classList.remove("editor-ready");
-  for (const id of ["info-controls","qr-controls","info-font","shop-font","text-target","status"]) {
+  for (const id of ["info-controls","qr-controls","info-font","shop-font","item-sizes","status"]) {
     copy.querySelector("#"+id).replaceChildren();
   }
   copy.querySelector("#back").classList.remove("dragging");
@@ -537,6 +556,8 @@ function saveShareImage() {
   },"image/png");
 }
 
+const dividerX=752;
+let dividedLayout=false;
 const hitBoxes=new Map();
 const canvas=back.canvas;
 
@@ -546,7 +567,12 @@ function clamp(value,max) {
 
 function placeItem(id,x,y,width,height) {
   const manual=state.positions[id];
-  const left=manual ? clamp(manual.x,W-width) : x;
+  let minX=0, maxX=W-width;
+  if (dividedLayout) {
+    if (fieldById[id].qr) minX=dividerX+12;
+    else maxX=dividerX-8-width;
+  }
+  const left=minX+clamp((manual?.x ?? x)-minX,maxX-minX);
   const top=manual ? clamp(manual.y,H-height) : y;
   hitBoxes.set(id,{x:left,y:top,width,height});
   back.translate(Math.round(left-x),Math.round(top-y));
@@ -634,23 +660,56 @@ byId("reset-positions").addEventListener("click",()=>{
   refresh();
 });
 
-const textTarget=byId("text-target");
-const textScale=byId("text-scale");
-for (const [id,label] of textTargets) textTarget.add(new Option(label,id));
-function syncTextSize() {
-  const size=state.textSizes[textTarget.value];
-  textScale.value=size;
-  byId("text-percent").value=size+"%";
+function updateSizeVisibility() {
+  for (const row of byId("item-sizes").children) {
+    const owner=state.fields[row.dataset.owner];
+    row.hidden=Boolean(owner && !owner.enabled);
+  }
+  byId("phone-gap-row").hidden=!state.fields.phone.enabled;
 }
-function setTextSize(value) {
-  state.textSizes[textTarget.value]=value;
-  syncTextSize();
+
+for (const [id,title] of textTargets) {
+  const row=document.createElement("div");
+  row.className="qr-scale";
+  row.dataset.owner=id.replace(/-label$/,"");
+  const input=document.createElement("input");
+  input.type="range";
+  input.id="size-"+id;
+  input.min=50;
+  input.max=180;
+  input.value=state.textSizes[id];
+  const label=document.createElement("label");
+  label.htmlFor=input.id;
+  label.textContent=contactFields.some(f=>f.id===id)?title+" 값":title;
+  const output=document.createElement("output");
+  output.htmlFor.add(input.id);
+  output.value=input.value+"%";
+  function updateSize() {
+    state.textSizes[id]=Number(input.value);
+    output.value=input.value+"%";
+    refresh();
+  }
+  input.addEventListener("input",updateSize);
+  const reset=document.createElement("button");
+  reset.type="button";
+  reset.textContent="기본";
+  reset.setAttribute("aria-label",label.textContent+" 기본 크기");
+  reset.addEventListener("click",()=>{input.value=100;updateSize();});
+  row.append(label,input,output,reset);
+  byId("item-sizes").append(row);
+}
+updateSizeVisibility();
+byId("logo-size").value=state.logoScale;
+byId("logo-size-value").value=state.logoScale+"%";
+byId("logo-size").addEventListener("input",event=>{
+  state.logoScale=Number(event.target.value);
+  byId("logo-size-value").value=state.logoScale+"%";
   refresh();
-}
-textTarget.addEventListener("change",syncTextSize);
-textScale.addEventListener("input",()=>setTextSize(Number(textScale.value)));
-byId("reset-text-size").addEventListener("click",()=>setTextSize(100));
-syncTextSize();
+});
+byId("phone-gap").addEventListener("input",event=>{
+  state.phoneGap=Number(event.target.value);
+  refresh();
+});
 buildInputs();
 updateDesignControls();
 updateLanguageControls();
