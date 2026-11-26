@@ -27,8 +27,9 @@ const fields = [
 
 const fieldById = Object.fromEntries(fields.map(field=>[field.id,field]));
 const textTargets = fields.map(f=>[f.id, f.qr ? f.label+" QR 문구" : f.label]);
-const contactFields = fields.filter(f=>!f.qr && f.id!=="shop" && f.id!=="name");
-for (const field of contactFields) textTargets.push([field.id+"-label",field.label+" 항목명"]);
+const infoFields = fields.filter(f=>!f.qr);
+const contactFields = infoFields.filter(f=>f.id!=="shop" && f.id!=="name");
+for (const field of infoFields) textTargets.push([field.id+"-label",field.label+" 항목명"]);
 textTargets.push(["services","하단 업무 문구"]);
 
 const initial = {
@@ -36,7 +37,7 @@ const initial = {
   language:"ko",
   qrScale:100,
   logoScale:100,
-  phoneGap:null,
+  fieldGaps:Object.fromEntries(infoFields.map(f=>[f.id,null])),
   fonts:{shop:"CardSatisfy",info:"CardBrush"},
   positions:{},
   textSizes:Object.fromEntries(textTargets.map(([id])=>[id,100])),
@@ -50,7 +51,11 @@ const storageKey = "golden-hour-garage-editor-v1"+(published.version ? "-"+publi
 function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
   if (Number.isInteger(saved?.logoScale) && saved.logoScale>=40 && saved.logoScale<=110) state.logoScale=saved.logoScale;
-  if (Number.isInteger(saved?.phoneGap) && saved.phoneGap>=0 && saved.phoneGap<=180) state.phoneGap=saved.phoneGap;
+  for (const {id} of infoFields) {
+    const gaps=saved?.fieldGaps;
+    const value=gaps && Object.hasOwn(gaps,id) ? gaps[id] : (id==="phone"?saved?.phoneGap:undefined);
+    if (value===null || (Number.isInteger(value) && value>=0 && value<=180)) state.fieldGaps[id]=value;
+  }
   for (const [id] of textTargets) {
     const value=saved?.textSizes?.[id];
     if (Number.isInteger(value) && value>=50 && value<=180) state.textSizes[id]=value;
@@ -268,28 +273,22 @@ function infoRowsAtScale(items,factor,custom) {
     const hero=field.id==="shop" || field.id==="name";
     const base=Math.round(field.size*factor);
     const scale=custom ? state.textSizes[field.id]/100 : 1;
-    const labelScale=custom && !hero ? state.textSizes[field.id+"-label"]/100 : 1;
+    const labelScale=custom ? state.textSizes[field.id+"-label"]/100 : 1;
     const size=Math.round((field.id==="shop"?base:Math.round(base*1.18))*scale);
     const labelSize=Math.round(Math.max(19,Math.round(base*.96))*labelScale);
     const font=`400 ${size}px ${fontStack(field.id==="shop"?"shop":"info")}`;
+    const explicitGap=state.fieldGaps[field.id];
+    const showTitle=!hero || explicitGap!==null;
+    back.font=`400 ${labelSize}px ${fontStack("info")}`;
+    const titleWidth=Math.min(159,Math.ceil(back.measureText(cardLabel(field)).width));
+    const titleGap=explicitGap ?? (hero?0:171-titleWidth);
+    const x=showTitle ? 96+titleWidth+titleGap : 96;
     back.font=font;
-    let x=hero?96:267;
-    if (field.id==="phone") {
-      back.font=`400 ${labelSize}px ${fontStack("info")}`;
-      const titleWidth=Math.min(159,Math.ceil(back.measureText(cardLabel(field)).width));
-      const gap=state.phoneGap ?? (171-titleWidth);
-      x=96+titleWidth+gap;
-      if (custom) {
-        byId("phone-gap").value=gap;
-        byId("phone-gap-value").value=gap+" px";
-      }
-      back.font=font;
-    }
     const placeholder=state.language==="en" ? (field.englishPlaceholder || field.english) : field.placeholder;
     const lines=lineWrap(back,value||placeholder,703-x);
     const step=Math.ceil(base*1.23*scale);
-    const height=Math.max(lines.length*step,hero?0:labelSize+3);
-    return {field,hero,labelSize,x,font,lines,step,height,gap:Math.round(16*factor)};
+    const height=Math.max(lines.length*step,showTitle?labelSize+3:0);
+    return {field,showTitle,titleGap,labelSize,x,font,lines,step,height,gap:Math.round(16*factor)};
   });
   const height=rows.reduce((sum,row)=>sum+row.height+row.gap,0)-(rows.at(-1)?.gap||0);
   return {rows,height};
@@ -315,7 +314,9 @@ function drawInfo(items,theme) {
     const width=row.x-96+Math.ceil(Math.max(1,...row.lines.map(line=>back.measureText(line).width)));
     back.save();
     placeItem(row.field.id,96,y,width+4,row.height+4);
-    if(!row.hero){
+    byId(row.field.id+"-gap").value=row.titleGap;
+    byId(row.field.id+"-gap-value").value=row.titleGap+" px";
+    if(row.showTitle){
       back.fillStyle=theme.accent;
       back.font=`400 ${row.labelSize}px ${fontStack("info")}`;
       back.fillText(cardLabel(row.field),96,y+2,159);
@@ -509,7 +510,7 @@ function save(side) {
 async function savePublishedEditor() {
   const copy=document.documentElement.cloneNode(true);
   copy.classList.remove("editor-ready");
-  for (const id of ["info-controls","qr-controls","info-font","shop-font","item-sizes","status"]) {
+  for (const id of ["info-controls","qr-controls","info-font","shop-font","item-sizes","field-gaps","status"]) {
     copy.querySelector("#"+id).replaceChildren();
   }
   copy.querySelector("#back").classList.remove("dragging");
@@ -661,17 +662,18 @@ byId("reset-positions").addEventListener("click",()=>{
 });
 
 function updateSizeVisibility() {
-  for (const row of byId("item-sizes").children) {
-    const owner=state.fields[row.dataset.owner];
-    row.hidden=Boolean(owner && !owner.enabled);
+  for (const row of document.querySelectorAll("#item-sizes > div, #field-gaps > div")) {
+    const id=row.dataset.owner;
+    const hiddenTitle=(id==="shop" || id==="name") && row.dataset.title==="true" && state.fieldGaps[id]===null;
+    row.hidden=state.fields[id]?.enabled===false || hiddenTitle;
   }
-  byId("phone-gap-row").hidden=!state.fields.phone.enabled;
 }
 
 for (const [id,title] of textTargets) {
   const row=document.createElement("div");
   row.className="qr-scale";
   row.dataset.owner=id.replace(/-label$/,"");
+  row.dataset.title=String(id.endsWith("-label"));
   const input=document.createElement("input");
   input.type="range";
   input.id="size-"+id;
@@ -698,16 +700,41 @@ for (const [id,title] of textTargets) {
   row.append(label,input,output,reset);
   byId("item-sizes").append(row);
 }
+for (const field of infoFields) {
+  const row=document.createElement("div");
+  row.className="qr-scale";
+  row.dataset.owner=field.id;
+  const input=document.createElement("input");
+  input.type="range";
+  input.id=field.id+"-gap";
+  input.min=0;
+  input.max=180;
+  const label=document.createElement("label");
+  label.htmlFor=input.id;
+  label.textContent=field.label;
+  const output=document.createElement("output");
+  output.id=input.id+"-value";
+  output.htmlFor.add(input.id);
+  const reset=document.createElement("button");
+  reset.type="button";
+  reset.textContent=contactFields.includes(field)?"기본":"제목 숨기기";
+  reset.setAttribute("aria-label",field.label+" "+reset.textContent);
+  function applyGap(value) {
+    state.fieldGaps[field.id]=value;
+    updateSizeVisibility();
+    refresh();
+  }
+  input.addEventListener("input",()=>applyGap(Number(input.value)));
+  reset.addEventListener("click",()=>applyGap(null));
+  row.append(label,input,output,reset);
+  byId("field-gaps").append(row);
+}
 updateSizeVisibility();
 byId("logo-size").value=state.logoScale;
 byId("logo-size-value").value=state.logoScale+"%";
 byId("logo-size").addEventListener("input",event=>{
   state.logoScale=Number(event.target.value);
   byId("logo-size-value").value=state.logoScale+"%";
-  refresh();
-});
-byId("phone-gap").addEventListener("input",event=>{
-  state.phoneGap=Number(event.target.value);
   refresh();
 });
 buildInputs();
