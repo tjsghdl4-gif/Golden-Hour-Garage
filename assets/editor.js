@@ -26,12 +26,18 @@ const fields = [
 ];
 
 const fieldById = Object.fromEntries(fields.map(field=>[field.id,field]));
+const textTargets = fields.map(f=>[f.id, f.qr ? f.label+" QR 문구" : f.label]);
+const contactFields = fields.filter(f=>!f.qr && f.id!=="shop" && f.id!=="name");
+for (const field of contactFields) textTargets.push([field.id+"-label",field.label+" 항목명"]);
+textTargets.push(["services","하단 업무 문구"]);
+
 const initial = {
   design:"engraved",
   language:"ko",
   qrScale:100,
   fonts:{shop:"CardSatisfy",info:"CardBrush"},
   positions:{},
+  textSizes:Object.fromEntries(textTargets.map(([id])=>[id,100])),
   infoOrder:fields.filter(field=>!field.qr).map(field=>field.id),
   colors:Object.fromEntries(Object.entries(designSettings).map(([key,value])=>[key,value.paper])),
   fields:Object.fromEntries(fields.map(field=>[field.id,{enabled:field.initial,text:""}])),
@@ -41,6 +47,10 @@ const published=JSON.parse(document.getElementById("published-settings").textCon
 const storageKey = "golden-hour-garage-editor-v1"+(published.version ? "-"+published.version : "");
 function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
+  for (const [id] of textTargets) {
+    const value=saved?.textSizes?.[id];
+    if (Number.isInteger(value) && value>=50 && value<=180) state.textSizes[id]=value;
+  }
   for (const role of ["shop","info"]) {
     if (validFont(saved?.fonts?.[role])) state.fonts[role]=saved.fonts[role];
   }
@@ -247,26 +257,35 @@ function lineWrap(ctx,text,width) {
   return lines;
 }
 
-function infoLayout(items) {
-  let rows, height;
-  for (let factor=1;factor>=.4;factor-=.05) {
-    rows=items.map(field=>{
-      const value=state.fields[field.id].text.trim();
-      const hero=field.id==="shop"||field.id==="name";
-      const size=Math.round(field.size*factor);
-      const x=hero?96:267;
-      const sizeOnCard=field.id==="shop"?size:Math.round(size*1.18);
-      const font=`400 ${sizeOnCard}px ${fontStack(field.id==="shop"?"shop":"info")}`;
-      back.font=font;
-      const placeholder=state.language==="en" ? (field.englishPlaceholder || field.english) : field.placeholder;
-      const lines=lineWrap(back,value||placeholder,703-x);
-      const step=Math.ceil(size*1.23);
-      return {field,hero,size,x,font,lines,step,height:lines.length*step,gap:Math.round(16*factor)};
-    });
-    height=rows.reduce((sum,row)=>sum+row.height+row.gap,0)-(rows[rows.length-1]?.gap||0);
-    if(height<=514) break;
-  }
+function infoRowsAtScale(items,factor,custom) {
+  const rows=items.map(field=>{
+    const value=state.fields[field.id].text.trim();
+    const hero=field.id==="shop" || field.id==="name";
+    const base=Math.round(field.size*factor);
+    const scale=custom ? state.textSizes[field.id]/100 : 1;
+    const labelScale=custom && !hero ? state.textSizes[field.id+"-label"]/100 : 1;
+    const size=Math.round((field.id==="shop"?base:Math.round(base*1.18))*scale);
+    const labelSize=Math.round(Math.max(19,Math.round(base*.96))*labelScale);
+    const font=`400 ${size}px ${fontStack(field.id==="shop"?"shop":"info")}`;
+    back.font=font;
+    const x=hero?96:267;
+    const placeholder=state.language==="en" ? (field.englishPlaceholder || field.english) : field.placeholder;
+    const lines=lineWrap(back,value||placeholder,703-x);
+    const step=Math.ceil(base*1.23*scale);
+    const height=Math.max(lines.length*step,hero?0:labelSize+3);
+    return {field,hero,labelSize,x,font,lines,step,height,gap:Math.round(16*factor)};
+  });
+  const height=rows.reduce((sum,row)=>sum+row.height+row.gap,0)-(rows.at(-1)?.gap||0);
   return {rows,height};
+}
+
+function infoLayout(items) {
+  // Choose the default fit first, so increasing one field never shrinks its neighbours.
+  let factor=1;
+  while (factor>.4 && infoRowsAtScale(items,factor,false).height>514) {
+    factor=Math.max(.4,Math.round((factor-.05)*100)/100);
+  }
+  return infoRowsAtScale(items,factor,true);
 }
 
 function drawInfo(items,theme) {
@@ -282,7 +301,7 @@ function drawInfo(items,theme) {
     placeItem(row.field.id,96,y,width+4,row.height+4);
     if(!row.hero){
       back.fillStyle=theme.accent;
-      back.font=`400 ${Math.max(19,Math.round(row.size*.96))}px ${fontStack("info")}`;
+      back.font=`400 ${row.labelSize}px ${fontStack("info")}`;
       back.fillText(cardLabel(row.field),96,y+2,159);
     }
     back.font=row.font;
@@ -321,14 +340,16 @@ function qrMatrix(url) {
 function drawQRs(items,theme) {
   const errors=[];
   const size=Math.round((items.length===2?176:220)*state.qrScale/100);
-  const labelHeight=37, gap=35;
-  const height=items.length*(size+labelHeight)+Math.max(0,items.length-1)*gap;
+  const gap=35;
+  const labelSize=field=>Math.round(30*state.textSizes[field.id]/100);
+  const height=items.reduce((sum,field)=>sum+size+labelSize(field)+7,0)+Math.max(0,items.length-1)*gap;
   let y=Math.round((H-height)/2);
   const centre=922;
   const x=Math.round(centre-size/2);
   for(const field of items) {
     back.save();
-    back.font="400 30px "+fontStack("info");
+    back.font=`400 ${labelSize(field)}px ${fontStack("info")}`;
+    const labelHeight=labelSize(field)+7;
     const width=Math.max(size,Math.ceil(back.measureText("< "+cardLabel(field)+" >").width));
     placeItem(field.id,Math.round(centre-width/2),y,width,size+labelHeight+7);
     let code=null,error=false;
@@ -367,7 +388,7 @@ function drawQRs(items,theme) {
       back.fillText(state.language==="en"?"Enter QR URL":"QR 주소 입력",centre,y+size/2);
     }
     back.fillStyle=theme.accent;
-    back.font="400 30px "+fontStack("info");
+    back.font=`400 ${labelSize(field)}px ${fontStack("info")}`;
     back.textAlign="center";
     back.textBaseline="top";
     back.fillText("< "+cardLabel(field)+" >",centre,y+size+8);
@@ -381,7 +402,7 @@ function drawServices(theme) {
   const words=state.language==="en"?"Repair · Custom · Tuning · Rental":"정비 · 커스텀 · 튜닝 · 렌탈";
   const centre=W/2, baseline=608;
   back.save();
-  back.font="400 34px "+fontStack("info");
+  back.font=`400 ${Math.round(34*state.textSizes.services/100)}px ${fontStack("info")}`;
   back.textAlign="center";
   back.textBaseline="middle";
   const half=back.measureText(words).width/2;
@@ -411,7 +432,7 @@ function refresh() {
   const theme=colors(color);
   const info=state.infoOrder.filter(id=>state.fields[id].enabled).map(id=>fieldById[id]);
   const links=fields.filter(f=>f.qr&&state.fields[f.id].enabled);
-  if (info.length && links.length && !Object.keys(state.positions).length) {
+  if (info.length && links.length) {
     back.save();
     back.globalAlpha=.35;
     back.fillStyle=theme.accent;
@@ -469,7 +490,7 @@ function save(side) {
 async function savePublishedEditor() {
   const copy=document.documentElement.cloneNode(true);
   copy.classList.remove("editor-ready");
-  for (const id of ["info-controls","qr-controls","info-font","shop-font","status"]) {
+  for (const id of ["info-controls","qr-controls","info-font","shop-font","text-target","status"]) {
     copy.querySelector("#"+id).replaceChildren();
   }
   copy.querySelector("#back").classList.remove("dragging");
@@ -613,6 +634,23 @@ byId("reset-positions").addEventListener("click",()=>{
   refresh();
 });
 
+const textTarget=byId("text-target");
+const textScale=byId("text-scale");
+for (const [id,label] of textTargets) textTarget.add(new Option(label,id));
+function syncTextSize() {
+  const size=state.textSizes[textTarget.value];
+  textScale.value=size;
+  byId("text-percent").value=size+"%";
+}
+function setTextSize(value) {
+  state.textSizes[textTarget.value]=value;
+  syncTextSize();
+  refresh();
+}
+textTarget.addEventListener("change",syncTextSize);
+textScale.addEventListener("input",()=>setTextSize(Number(textScale.value)));
+byId("reset-text-size").addEventListener("click",()=>setTextSize(100));
+syncTextSize();
 buildInputs();
 updateDesignControls();
 updateLanguageControls();
