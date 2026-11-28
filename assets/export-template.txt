@@ -117,6 +117,13 @@
 @font-face {font-family:'fira-mono';src:url('@@asset:font/woff2:fonts/fira-mono.woff2@@') format('woff2');font-weight:400}
 .font-picker {display:grid;grid-template-columns:5em minmax(0,1fr);align-items:center;gap:8px;margin:6px 0}
 .font-picker select {min-width:0;width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);padding:7px;border-radius:6px}
+.font-samples,.coordinate-pair {display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.font-samples {font-size:21px;margin:8px 0}
+.coordinate-pair input {width:6em}
+.number-unit {display:flex;align-items:center;gap:2px;font-size:11px}
+.number-unit input,.coordinate-pair input {font:inherit;padding:5px 2px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px}
+.title-switch {grid-column:1/-1;display:flex;align-items:center;gap:6px}
+.qr-scale .title-switch input {width:auto}
 #back {touch-action:none;user-select:none;-webkit-touch-callout:none}
 #back.dragging {cursor:grabbing}
 :root { color-scheme:dark; --bg:#171611; --panel:#211f18; --line:#3d382c; --ink:#f6ebd6; --muted:#c0b5a2; --gold:#efb66b; --corners:14px }
@@ -162,8 +169,8 @@ input[type=checkbox] { accent-color:var(--gold); width:15px; height:15px; margin
 .row input[aria-invalid=true] { border-color:#ef8c78 }
 .row input::placeholder { color:#998e7a }
 .note { color:var(--muted); margin:7px 0 0; font-size:12px }
-.qr-scale { display:grid; grid-template-columns:auto minmax(0,1fr) 45px; align-items:center; gap:9px; margin:10px 0 3px; font-size:13px }
-#item-sizes .qr-scale, #field-gaps .qr-scale {grid-template-columns:minmax(6.5em,auto) minmax(45px,1fr) 3em auto}
+.qr-scale { display:grid; grid-template-columns:auto minmax(0,1fr) 64px; align-items:center; gap:9px; margin:10px 0 3px; font-size:13px }
+#item-sizes .qr-scale, #field-gaps .qr-scale {grid-template-columns:minmax(6.5em,auto) minmax(32px,1fr) 64px auto}
 #item-sizes button, #field-gaps button {padding:3px 6px;font-size:12px}
 .qr-scale[hidden] {display:none}
 .qr-scale input { width:100%; min-width:0; accent-color:var(--gold) }
@@ -206,16 +213,18 @@ figcaption button { padding:6px 10px; font-size:12px }
 <fieldset><legend>앞면 시안</legend><div class="segment"><button type="button" data-design="engraved" aria-pressed="true">구리빛 판화</button><button type="button" data-design="embroidered" aria-pressed="false">초록 자수</button></div><div class="qr-scale"><label for="logo-size">로고 크기</label><input id="logo-size" type="range" min="40" max="110" value="100"><output for="logo-size" id="logo-size-value">100%</output></div></fieldset>
 <fieldset><legend>앞뒷면 배경색</legend><div class="color-control"><input id="paper" type="color" aria-label="앞뒷면 배경색" value="#14110f"><output id="hex" for="paper">#14110F</output><button id="reset" type="button">기본색</button></div></fieldset>
 <fieldset><legend>뒷면 표기 언어</legend><div class="segment" aria-label="뒷면 표기 언어"><button type="button" data-language="ko" aria-pressed="true">국문</button><button type="button" data-language="en" aria-pressed="false">English</button></div></fieldset>
-<fieldset><legend>글씨체</legend><label class="font-picker">상호명<select id="shop-font"></select></label><label class="font-picker">정보<select id="info-font"></select></label><p class="note">영문 서체를 고르면 한글은 나눔손글씨 붓으로 표시됩니다.</p></fieldset>
+<fieldset><legend>글씨체</legend><label class="font-picker">상호명<select id="shop-font"></select></label><label class="font-picker">정보<select id="info-font"></select></label><div class="font-samples"><span id="sample-shop" aria-label="상호명 글씨체 미리보기">골든아워 개러지</span><span id="sample-info" aria-label="정보 글씨체 미리보기">이름 · 연락처 010</span></div><p class="note">영문 서체를 고르면 한글은 나눔손글씨 붓으로 표시됩니다.</p></fieldset>
 <fieldset><legend>뒷면 글자색</legend>
 <label class="font-picker">상호명<input type="color" id="ink-shop"></label>
 <label class="font-picker">정보 제목<input type="color" id="ink-label"></label>
-<label class="font-picker">정보 값<input type="color" id="ink-value"></label></fieldset>
+<button type="button" id="accent-default">제목을 업무 문구 색으로</button><label class="font-picker">정보 값<input type="color" id="ink-value"></label></fieldset>
 <fieldset><legend>개별 글자 크기</legend>
 <div id="item-sizes"></div></fieldset>
 <fieldset><legend>매장 정보</legend><div id="info-controls"></div><p class="note">↑·↓로 카드에 표시될 순서를 바꿀 수 있습니다.</p></fieldset>
-<fieldset><legend>기본정보 제목과 값 사이 간격</legend><div id="field-gaps"></div><p class="note">이름과 상호명은 간격을 조절하면 제목도 함께 표시됩니다.</p></fieldset>
+<fieldset><legend>기본정보 제목과 값 사이 간격</legend><div id="field-gaps"></div><p class="note">각 항목의 제목 표시는 체크로 선택합니다. 제목을 숨기면 간격은 값의 왼쪽 여백으로 적용됩니다.</p></fieldset>
 <fieldset><legend>QR 코드</legend><div id="qr-controls"></div><label class="font-picker">인스타 위치<select id="dock-instagram"><option value="auto">자동</option><option value="top">상단</option><option value="middle">중단</option><option value="bottom">하단</option><option value="manual" disabled>직접 이동</option></select></label><label class="font-picker">블로그 위치<select id="dock-blog"><option value="auto">자동</option><option value="top">상단</option><option value="middle">중단</option><option value="bottom">하단</option><option value="manual" disabled>직접 이동</option></select></label><div class="qr-scale"><label for="qr-scale">QR 크기</label><input id="qr-scale" type="range" min="65" max="120" step="1" value="100"><output id="qr-scale-value" for="qr-scale">100%</output></div><p class="note">인스타그램 ID 또는 주소와 블로그 주소를 입력하면 QR이 만들어집니다.</p></fieldset>
+<fieldset><legend>뒷면 위치 (px)</legend><label class="font-picker">조절 항목<select id="position-target"></select></label>
+<div class="coordinate-pair"><label>가로 X <input id="position-x" type="number" step="1" inputmode="numeric"></label><label>세로 Y <input id="position-y" type="number" step="1" inputmode="numeric"></label></div></fieldset>
 </aside>
 <section class="preview-panel" aria-labelledby="preview-title">
 <div class="preview-head"><h2 id="preview-title">앞뒷면 미리보기</h2><span>90 × 50 mm · 재단 여유 사방 3 mm · 300 dpi</span></div>
@@ -2566,8 +2575,9 @@ const initial = {
   language:"ko",
   qrScale:100,
   docks:{instagram:"auto",blog:"auto"},
-  inks:{shop:"#f3e3c4",label:"#f3e3c4",value:"#f3e3c4"},
+  inks:{shop:"#f3e3c4",label:null,value:"#f3e3c4"},
   logoScale:100,
+  showTitles:Object.fromEntries(infoFields.map(f=>[f.id,contactFields.includes(f)])),
   fieldGaps:Object.fromEntries(infoFields.map(f=>[f.id,null])),
   fonts:{shop:"CardSatisfy",info:"CardBrush"},
   positions:{},
@@ -2583,12 +2593,15 @@ function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
   if (Number.isInteger(saved?.logoScale) && saved.logoScale>=40 && saved.logoScale<=110) state.logoScale=saved.logoScale;
   for (const role of Object.keys(initial.inks)) {
-    if (/^#[0-9a-f]{6}$/i.test(saved?.inks?.[role])) state.inks[role]=saved.inks[role];
+    const ink=saved?.inks?.[role];
+    if (role==="label" && (ink===null || (!saved?.showTitles && ink?.toLowerCase?.()==="#f3e3c4"))) state.inks.label=null;
+    else if (/^#[0-9a-f]{6}$/i.test(ink)) state.inks[role]=ink;
   }
   for (const id of Object.keys(initial.docks)) {
     if (["auto","top","middle","bottom"].includes(saved?.docks?.[id])) state.docks[id]=saved.docks[id];
   }
   for (const {id} of infoFields) {
+    if (typeof saved?.showTitles?.[id]==="boolean") state.showTitles[id]=saved.showTitles[id];
     const gaps=saved?.fieldGaps;
     const value=gaps && Object.hasOwn(gaps,id) ? gaps[id] : (id==="phone"?saved?.phoneGap:undefined);
     if (value===null || (Number.isInteger(value) && value>=0 && value<=180)) state.fieldGaps[id]=value;
@@ -2783,16 +2796,13 @@ function lineWrap(ctx,text,width) {
   const lines=[];
   for (const paragraph of text.split(/\r?\n/)) {
     let line="";
-    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-      const next=line?line+" "+word:word;
-      if(ctx.measureText(next).width<=width) {
-        line=next;
-        continue;
+    for (const run of paragraph.match(/\s+|\S+/gu) || []) {
+      if (line && /\S/u.test(run) && ctx.measureText(line+run).width>width) {
+        lines.push(line);
+        line="";
       }
-      if(line) lines.push(line);
-      line="";
-      for(const char of word) {
-        if(line && ctx.measureText(line+char).width>width) {
+      for (const char of run) {
+        if (line && ctx.measureText(line+char).width>width) {
           lines.push(line);
           line="";
         }
@@ -2806,7 +2816,7 @@ function lineWrap(ctx,text,width) {
 
 function infoRowsAtScale(items,factor,custom) {
   const rows=items.map(field=>{
-    const value=state.fields[field.id].text.trim();
+    const value=state.fields[field.id].text;
     const hero=field.id==="shop" || field.id==="name";
     const base=Math.round(field.size*factor);
     const scale=custom ? state.textSizes[field.id]/100 : 1;
@@ -2815,11 +2825,11 @@ function infoRowsAtScale(items,factor,custom) {
     const labelSize=Math.round(Math.max(19,Math.round(base*.96))*labelScale);
     const font=`400 ${size}px ${fontStack(field.id==="shop"?"shop":"info")}`;
     const explicitGap=state.fieldGaps[field.id];
-    const showTitle=!hero || explicitGap!==null;
+    const showTitle=state.showTitles[field.id];
     back.font=`400 ${labelSize}px ${fontStack("info")}`;
     const titleWidth=Math.min(159,Math.ceil(back.measureText(cardLabel(field)).width));
-    const titleGap=explicitGap ?? (hero?0:171-titleWidth);
-    const x=showTitle ? 96+titleWidth+titleGap : 96;
+    const titleGap=explicitGap ?? 0;
+    const x=96+(showTitle?titleWidth:0)+titleGap;
     back.font=font;
     const placeholder=state.language==="en" ? (field.englishPlaceholder || field.english) : field.placeholder;
     const lines=lineWrap(back,value||placeholder,(hero?W-96:703)-x);
@@ -2854,7 +2864,7 @@ function drawInfo(items,theme) {
     byId(row.field.id+"-gap").value=row.titleGap;
     byId(row.field.id+"-gap-value").value=row.titleGap+" px";
     if(row.showTitle){
-      back.fillStyle=state.inks.label;
+      back.fillStyle=state.inks.label ?? theme.accent;
       back.font=`400 ${row.labelSize}px ${fontStack("info")}`;
       back.fillText(cardLabel(row.field),96,y+2,159);
     }
@@ -3007,6 +3017,8 @@ function refresh() {
   front.drawImage(pictures[state.design].art,W*(1-scale)/2,H*(1-scale)/2,W*scale,H*scale);
   back.drawImage(base,0,0);
   const theme=colors(color);
+  byId("ink-label").value=state.inks.label ?? theme.accent;
+  for (const role of ["shop","info"]) byId("sample-"+role).style.fontFamily=fontStack(role);
   const info=state.infoOrder.filter(id=>state.fields[id].enabled).map(id=>fieldById[id]);
   const links=fields.filter(f=>f.qr&&state.fields[f.id].enabled);
   const contacts=contactFields.filter(f=>state.fields[f.id].enabled);
@@ -3025,6 +3037,7 @@ function refresh() {
     back.restore();
   }
   if(links.some(f=>!state.fields[f.id].text.trim())) notes.push("주소를 입력한 QR만 스캔할 수 있습니다.");
+  syncNumericControls();
   byId("center-shop").disabled=!state.fields.shop.enabled;
   for (const id of Object.keys(state.docks)) {
     const control=byId("dock-"+id);
@@ -3076,6 +3089,7 @@ function save(side) {
 async function savePublishedEditor() {
   const copy=document.documentElement.cloneNode(true);
   copy.classList.remove("editor-ready");
+  for (const el of copy.querySelectorAll(".number-unit")) el.remove();
   for (const id of ["info-controls","qr-controls","info-font","shop-font","item-sizes","field-gaps","status"]) {
     copy.querySelector("#"+id).replaceChildren();
   }
@@ -3145,8 +3159,12 @@ function placeItem(id,x,y,width,height) {
   back.translate(Math.round(left-x),Math.round(top-y));
 }
 
-function loadFamily(slug) {
-  return document.fonts.load('400 32px '+slug,'Golden Hour 대표');
+async function loadFamily(slug) {
+  const korean=fontCatalog.some(f=>f.slug===slug && f.group==="한글 추천 10종");
+  if (korean && window.loadHostedKorean) await window.loadHostedKorean(slug);
+  const faces=await document.fonts.load('400 32px "'+slug+'"','골든아워 개러지 김동권 010 Golden Hour');
+  if (!faces.length) throw new Error("서체 로딩 실패");
+  return faces;
 }
 
 for (const role of ["shop","info"]) {
@@ -3311,7 +3329,7 @@ byId("reset-positions").addEventListener("click",()=>{
 
 for (const role of Object.keys(state.inks)) {
   const control=byId("ink-"+role);
-  control.value=state.inks[role];
+  control.value=state.inks[role] ?? colors(state.colors[state.design]).accent;
   control.addEventListener("input",()=>{state.inks[role]=control.value;refresh();});
 }
 for (const id of Object.keys(state.docks)) {
@@ -3330,7 +3348,7 @@ byId("center-shop").addEventListener("click",()=>{
 function updateSizeVisibility() {
   for (const row of document.querySelectorAll("#item-sizes > div, #field-gaps > div")) {
     const id=row.dataset.owner;
-    const hiddenTitle=(id==="shop" || id==="name") && row.dataset.title==="true" && state.fieldGaps[id]===null;
+    const hiddenTitle=row.dataset.title==="true" && !state.showTitles[id];
     row.hidden=state.fields[id]?.enabled===false || hiddenTitle;
   }
 }
@@ -3383,7 +3401,7 @@ for (const field of infoFields) {
   output.htmlFor.add(input.id);
   const reset=document.createElement("button");
   reset.type="button";
-  reset.textContent=contactFields.includes(field)?"기본":"제목 숨기기";
+  reset.textContent="기본";
   reset.setAttribute("aria-label",field.label+" "+reset.textContent);
   function applyGap(value) {
     state.fieldGaps[field.id]=value;
@@ -3393,6 +3411,18 @@ for (const field of infoFields) {
   input.addEventListener("input",()=>applyGap(Number(input.value)));
   reset.addEventListener("click",()=>applyGap(null));
   row.append(label,input,output,reset);
+  const titleSwitch=document.createElement("label");
+  titleSwitch.className="title-switch";
+  const toggle=document.createElement("input");
+  toggle.type="checkbox"; toggle.checked=state.showTitles[field.id];
+  toggle.setAttribute("aria-label",field.label+" 제목 표시");
+  toggle.addEventListener("change",()=>{
+    state.showTitles[field.id]=toggle.checked;
+    updateSizeVisibility();
+    refresh();
+  });
+  titleSwitch.append(toggle,"제목 표시");
+  row.append(titleSwitch);
   byId("field-gaps").append(row);
 }
 updateSizeVisibility();
@@ -3413,6 +3443,63 @@ qrScaleInput.addEventListener("input",()=>{
   byId("qr-scale-value").value=state.qrScale+"%";
   refresh();
 });
+byId("accent-default").addEventListener("click",()=>{state.inks.label=null;refresh();});
+const numericPairs=[];
+for (const slider of document.querySelectorAll('input[type="range"]')) {
+  const row=slider.closest(".qr-scale");
+  const output=row.querySelector("output");
+  output.hidden=true;
+  const wrapper=document.createElement("span");
+  wrapper.className="number-unit";
+  const number=document.createElement("input");
+  number.type="number";number.inputMode="numeric";number.id=slider.id+"-number";
+  number.min=slider.min;number.max=slider.max;number.step=slider.step||"1";
+  number.setAttribute("aria-label",row.querySelector("label").textContent+" 숫자 입력");
+  wrapper.append(number,slider.id.endsWith("-gap")?"px":"%");
+  output.after(wrapper);
+  function commit(final) {
+    const v=number.valueAsNumber;
+    if (Number.isFinite(v) && (final || number.validity.valid)) {
+      slider.value=String(Math.round(v));
+      slider.dispatchEvent(new Event("input"));
+    }
+    if (final) number.value=slider.value;
+  }
+  number.addEventListener("input",()=>commit(false));
+  number.addEventListener("blur",()=>commit(true));
+  number.addEventListener("keydown",e=>{if(e.key==="Enter")number.blur();});
+  numericPairs.push({slider,number});
+}
+
+const positionTarget=byId("position-target");
+positionTarget.replaceChildren(...fields.map(f=>new Option(f.label,f.id)));
+function syncNumericControls() {
+  for (const {slider,number} of numericPairs) {
+    if (document.activeElement!==number) number.value=slider.value;
+  }
+  for (const option of positionTarget.options) option.disabled=!hitBoxes.has(option.value);
+  if (!hitBoxes.has(positionTarget.value)) positionTarget.value=fields.find(f=>hitBoxes.has(f.id))?.id || "";
+  const box=hitBoxes.get(positionTarget.value);
+  for (const axis of ["x","y"]) {
+    const input=byId("position-"+axis);
+    input.disabled=!box;
+    if (document.activeElement!==input) input.value=box?Math.round(box[axis]):"";
+  }
+}
+positionTarget.addEventListener("change",syncNumericControls);
+for (const axis of ["x","y"]) {
+  const input=byId("position-"+axis);
+  input.addEventListener("input",()=>{
+    const id=positionTarget.value, box=hitBoxes.get(id);
+    if (!box || !Number.isSafeInteger(input.valueAsNumber)) return;
+    state.positions[id]={x:box.x,y:box.y,[axis]:input.valueAsNumber};
+    refresh();
+    const placed=hitBoxes.get(id);
+    state.positions[id]={x:placed.x,y:placed.y};
+  });
+  input.addEventListener("blur",()=>{const box=hitBoxes.get(positionTarget.value);if(box)input.value=Math.round(box[axis]);refresh();});
+  input.addEventListener("keydown",e=>{if(e.key==="Enter")input.blur();});
+}
 for(const button of document.querySelectorAll("[data-language]")) {
   button.addEventListener("click",()=>{
     state.language=button.dataset.language;
