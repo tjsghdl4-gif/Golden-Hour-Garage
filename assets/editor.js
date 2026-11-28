@@ -36,6 +36,8 @@ const initial = {
   design:"engraved",
   language:"ko",
   qrScale:100,
+  docks:{instagram:"auto",blog:"auto"},
+  inks:{shop:"#f3e3c4",label:"#f3e3c4",value:"#f3e3c4"},
   logoScale:100,
   fieldGaps:Object.fromEntries(infoFields.map(f=>[f.id,null])),
   fonts:{shop:"CardSatisfy",info:"CardBrush"},
@@ -51,6 +53,12 @@ const storageKey = "golden-hour-garage-editor-v1"+(published.version ? "-"+publi
 function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
   if (Number.isInteger(saved?.logoScale) && saved.logoScale>=40 && saved.logoScale<=110) state.logoScale=saved.logoScale;
+  for (const role of Object.keys(initial.inks)) {
+    if (/^#[0-9a-f]{6}$/i.test(saved?.inks?.[role])) state.inks[role]=saved.inks[role];
+  }
+  for (const id of Object.keys(initial.docks)) {
+    if (["auto","top","middle","bottom"].includes(saved?.docks?.[id])) state.docks[id]=saved.docks[id];
+  }
   for (const {id} of infoFields) {
     const gaps=saved?.fieldGaps;
     const value=gaps && Object.hasOwn(gaps,id) ? gaps[id] : (id==="phone"?saved?.phoneGap:undefined);
@@ -285,7 +293,7 @@ function infoRowsAtScale(items,factor,custom) {
     const x=showTitle ? 96+titleWidth+titleGap : 96;
     back.font=font;
     const placeholder=state.language==="en" ? (field.englishPlaceholder || field.english) : field.placeholder;
-    const lines=lineWrap(back,value||placeholder,703-x);
+    const lines=lineWrap(back,value||placeholder,(hero?W-96:703)-x);
     const step=Math.ceil(base*1.23*scale);
     const height=Math.max(lines.length*step,showTitle?labelSize+3:0);
     return {field,showTitle,titleGap,labelSize,x,font,lines,step,height,gap:Math.round(16*factor)};
@@ -317,12 +325,12 @@ function drawInfo(items,theme) {
     byId(row.field.id+"-gap").value=row.titleGap;
     byId(row.field.id+"-gap-value").value=row.titleGap+" px";
     if(row.showTitle){
-      back.fillStyle=theme.accent;
+      back.fillStyle=state.inks.label;
       back.font=`400 ${row.labelSize}px ${fontStack("info")}`;
       back.fillText(cardLabel(row.field),96,y+2,159);
     }
     back.font=row.font;
-    back.fillStyle=theme.primary;
+    back.fillStyle=row.field.id==="shop"?state.inks.shop:state.inks.value;
     row.lines.forEach((line,i)=>back.fillText(line,row.x,y+i*row.step));
     back.restore();
     y+=row.height+row.gap;
@@ -359,11 +367,29 @@ function drawQRs(items,theme) {
   const size=Math.round((items.length===2?176:220)*state.qrScale/100);
   const gap=35;
   const labelSize=field=>Math.round(30*state.textSizes[field.id]/100);
-  const height=items.reduce((sum,field)=>sum+size+labelSize(field)+7,0)+Math.max(0,items.length-1)*gap;
-  let y=Math.round((H-height)/2);
+  const heights=items.map(f=>size+labelSize(f)+14);
+  const total=heights.reduce((a,b)=>a+b,0)+Math.max(0,items.length-1)*gap;
+  let next=(H-total)/2;
+  const ys=items.map((field,i)=>{
+    const h=heights[i], auto=next;
+    next+=h+gap;
+    const stops={auto,top:46,middle:(H-h)/2,bottom:H-80-h};
+    return Math.round(stops[state.docks[field.id]]);
+  });
+  if (ys.length===2) {
+    const first=ys[0]<=ys[1]?0:1, last=1-first;
+    if (ys[first]+heights[first]+12>ys[last]) {
+      const free=H-heights[first]-heights[last]-12;
+      const topMargin=Math.min(46,free/3), bottomMargin=Math.min(80,free-topMargin);
+      const ideal=(ys[first]+ys[last]-heights[first]-12)/2;
+      ys[first]=topMargin+clamp(ideal-topMargin,free-topMargin-bottomMargin);
+      ys[last]=ys[first]+heights[first]+12;
+    }
+  }
   const centre=922;
   const x=Math.round(centre-size/2);
-  for(const field of items) {
+  for (const [index,field] of items.entries()) {
+    const y=Math.round(ys[index]);
     back.save();
     back.font=`400 ${labelSize(field)}px ${fontStack("info")}`;
     const labelHeight=labelSize(field)+7;
@@ -386,16 +412,19 @@ function drawQRs(items,theme) {
       errors.push(field.label+" QR 크기를 늘려 주세요.");
     }
     input.setAttribute("aria-invalid",String(error));
-    back.fillStyle="#fff";
-    back.fillRect(x,y,size,size);
+    const count=code ? code.getModuleCount() : 0;
+    const moduleSize=Math.floor(size/(count+8));
+    const side=code ? (count+8)*moduleSize : size;
+    const inset=Math.floor((size-side)/2);
+    const plateX=x+inset, plateY=y+inset;
+    back.fillStyle="#fff8ea";
+    back.fillRect(plateX,plateY,side,side);
     if(code) {
-      const count=code.getModuleCount();
-      const block=Math.floor(size/(count+8));
-      const margin=Math.floor((size-count*block)/2);
+
       back.fillStyle="#000";
       for(let row=0;row<count;row++) {
         for(let col=0;col<count;col++) {
-          if(code.isDark(row,col)) back.fillRect(x+margin+col*block,y+margin+row*block,block,block);
+          if(code.isDark(row,col)) back.fillRect(plateX+(col+4)*moduleSize,plateY+(row+4)*moduleSize,moduleSize,moduleSize);
         }
       }
     } else {
@@ -409,9 +438,9 @@ function drawQRs(items,theme) {
     back.font=`400 ${labelSize(field)}px ${fontStack("info")}`;
     back.textAlign="center";
     back.textBaseline="top";
-    back.fillText("< "+cardLabel(field)+" >",centre,y+size+8,width);
+    back.fillText("< "+cardLabel(field)+" >",centre,plateY+side+8,width);
     back.restore();
-    y+=size+labelHeight+gap;
+
   }
   return errors;
 }
@@ -451,7 +480,8 @@ function refresh() {
   const theme=colors(color);
   const info=state.infoOrder.filter(id=>state.fields[id].enabled).map(id=>fieldById[id]);
   const links=fields.filter(f=>f.qr&&state.fields[f.id].enabled);
-  dividedLayout=Boolean(info.length && links.length);
+  const contacts=contactFields.filter(f=>state.fields[f.id].enabled);
+  dividedLayout=Boolean(contacts.length && links.length);
   for(const f of fields.filter(f=>f.qr)) byId("value-"+f.id).setAttribute("aria-invalid","false");
   hitBoxes.clear();
   const notes=drawQRs(links,theme);
@@ -461,10 +491,17 @@ function refresh() {
     back.save();
     back.globalAlpha=.72;
     back.fillStyle=theme.accent;
-    back.fillRect(dividerX,105,4,451);
+    const length=Math.min(477,contacts.reduce((sum,f)=>sum+hitBoxes.get(f.id).height,0)+Math.max(0,contacts.length-1)*8);
+    back.fillRect(dividerX,556-length,4,length);
     back.restore();
   }
   if(links.some(f=>!state.fields[f.id].text.trim())) notes.push("주소를 입력한 QR만 스캔할 수 있습니다.");
+  byId("center-shop").disabled=!state.fields.shop.enabled;
+  for (const id of Object.keys(state.docks)) {
+    const control=byId("dock-"+id);
+    control.disabled=!state.fields[id].enabled;
+    control.value=state.positions[id]?"manual":state.docks[id];
+  }
   status.textContent=notes.join(" ");
 }
 
@@ -571,7 +608,7 @@ function placeItem(id,x,y,width,height) {
   let minX=0, maxX=W-width;
   if (dividedLayout) {
     if (fieldById[id].qr) minX=dividerX+12;
-    else maxX=dividerX-8-width;
+    else if (contactFields.includes(fieldById[id])) maxX=dividerX-8-width;
   }
   const left=minX+clamp((manual?.x ?? x)-minX,maxX-minX);
   const top=manual ? clamp(manual.y,H-height) : y;
@@ -615,13 +652,88 @@ function cardPoint(event) {
   return {x:(event.clientX-rect.left)*W/rect.width,y:(event.clientY-rect.top)*H/rect.height};
 }
 
+const guideCtx=byId("align-guides").getContext("2d");
+
+function snapAxis(axis,point,box,peers) {
+  const horizontal=axis==="x";
+  const dim=horizontal?"width":"height";
+  const cross=horizontal?"y":"x", otherDim=horizontal?"height":"width";
+  const limit=horizontal?W:H, raw=point[axis], size=box[dim];
+  const tolerance=Math.min(12,4*W/canvas.getBoundingClientRect().width);
+  let best={value:raw}, distance=tolerance;
+  function consider(value,guide) {
+    const delta=Math.abs(value-raw);
+    if (value>=0 && value+size<=limit && delta<=distance) {
+      best={value,...guide}; distance=delta;
+    }
+  }
+  for (const peer of peers) {
+    for (const fraction of [0,.5,1]) {
+      const at=peer[axis]+peer[dim]*fraction;
+      consider(at-size*fraction,{at});
+    }
+  }
+  consider((limit-size)/2,{at:limit/2});
+  // Equal spacing is meaningful among neighbours occupying the same row or column.
+  const neighbours=peers.filter(p=>p[cross]<point[cross]+box[otherDim] && p[cross]+p[otherDim]>point[cross])
+    .sort((a,b)=>a[axis]-b[axis]);
+  const track=point[cross]+box[otherDim]/2;
+  for (let i=1;i<neighbours.length;i++) {
+    const a=neighbours[i-1],b=neighbours[i];
+    const endA=a[axis]+a[dim],startB=b[axis],endB=startB+b[dim];
+    const gap=startB-endA;
+    if (gap<1) continue;
+    consider(endB+gap,{track,spans:[[endA,startB],[endB,endB+gap]]});
+    consider(a[axis]-gap-size,{track,spans:[[a[axis]-gap,a[axis]],[endA,startB]]});
+    const half=(gap-size)/2;
+    if (half>=1) consider(endA+half,{track,spans:[[endA,endA+half],[startB-half,startB]]});
+  }
+  return best;
+}
+
+function paintGuide(axis,guide) {
+  const g=guideCtx;
+  g.save();
+  g.strokeStyle="#67e6df"; g.lineWidth=2;
+  function segment(x1,y1,x2,y2) {
+    g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();
+  }
+  if (guide.at!==undefined) {
+    g.setLineDash([8,5]);
+    if (axis==="x") segment(guide.at,0,guide.at,H);
+    else segment(0,guide.at,W,guide.at);
+  }
+  if (guide.spans) {
+    const track=guide.track;
+    g.strokeStyle="#ff94cd";g.fillStyle="#fff";g.font="bold 18px sans-serif";
+    for (const [start,end] of guide.spans) {
+      const mid=(start+end)/2;
+      if (axis==="x") {
+        segment(start,track,end,track);
+        for (const x of [start,end]) segment(x,track-6,x,track+6);
+      } else {
+        segment(track,start,track,end);
+        for (const y of [start,end]) segment(track-6,y,track+6,y);
+      }
+      const x=axis==="x"?mid:track+8,y=axis==="x"?track-8:mid;
+      const label=Math.round(end-start)+" px";
+      g.fillStyle="#302130";g.fillRect(x-2,y-17,g.measureText(label).width+5,21);
+      g.fillStyle="white";g.fillText(label,x,y);
+    }
+  }
+  g.restore();
+}
+
 let hold=null;
 function endHold() {
   if (!hold) return;
   const pointer=hold.pointer;
   clearTimeout(hold.timer);
+  const moved=hold.active;
   hold=null;
+  if (moved) refresh();
   canvas.classList.remove("dragging");
+  guideCtx.clearRect(0,0,W,H);
   if (canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
 }
 canvas.addEventListener("pointerdown",event=>{
@@ -645,11 +757,17 @@ canvas.addEventListener("pointermove",event=>{
     return;
   }
   const point=cardPoint(event), box=hold.box;
-  state.positions[hold.id]={
-    x:Math.round(clamp(box.x+point.x-hold.point.x,W-box.width)),
-    y:Math.round(clamp(box.y+point.y-hold.point.y,H-box.height))
-  };
+  const proposed={x:box.x+point.x-hold.point.x,y:box.y+point.y-hold.point.y};
+  const peers=[...hitBoxes.entries()].filter(([id])=>id!==hold.id).map(([,b])=>b);
+  const snapX=snapAxis("x",proposed,box,peers);
+  const snapY=snapAxis("y",proposed,box,peers);
+  state.positions[hold.id]={x:Math.round(snapX.value),y:Math.round(snapY.value)};
   refresh();
+  const actual=hitBoxes.get(hold.id);
+  state.positions[hold.id]={x:actual.x,y:actual.y};
+  guideCtx.clearRect(0,0,W,H);
+  if (Math.abs(actual.x-snapX.value)<1) paintGuide("x",snapX);
+  if (Math.abs(actual.y-snapY.value)<1) paintGuide("y",snapY);
 });
 for (const type of ["pointerup","pointercancel","lostpointercapture"]) {
   canvas.addEventListener(type,event=>{if (event.pointerId===hold?.pointer) endHold();});
@@ -658,7 +776,26 @@ canvas.addEventListener("contextmenu",event=>event.preventDefault());
 byId("reset-positions").addEventListener("click",()=>{
   endHold();
   state.positions={};
+  state.docks={...initial.docks};
   refresh();
+});
+
+for (const role of Object.keys(state.inks)) {
+  const control=byId("ink-"+role);
+  control.value=state.inks[role];
+  control.addEventListener("input",()=>{state.inks[role]=control.value;refresh();});
+}
+for (const id of Object.keys(state.docks)) {
+  const control=byId("dock-"+id);
+  control.addEventListener("change",()=>{
+    state.docks[id]=control.value;
+    delete state.positions[id];
+    refresh();
+  });
+}
+byId("center-shop").addEventListener("click",()=>{
+  const box=hitBoxes.get("shop");
+  if (box) {state.positions.shop={x:(W-box.width)/2,y:box.y};refresh();}
 });
 
 function updateSizeVisibility() {
