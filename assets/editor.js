@@ -36,6 +36,7 @@ const initial = {
   design:"engraved",
   language:"ko",
   qrScale:100,
+  divider:{visible:true,mode:"auto",length:null},
   docks:{instagram:"auto",blog:"auto"},
   inks:{shop:"#f3e3c4",label:null,value:"#f3e3c4"},
   logoScale:100,
@@ -53,6 +54,12 @@ const published=JSON.parse(document.getElementById("published-settings").textCon
 const storageKey = "golden-hour-garage-editor-v1"+(published.version ? "-"+published.version : "");
 function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
+  const divider=saved?.divider;
+  if (typeof divider?.visible==="boolean") state.divider.visible=divider.visible;
+  if (["auto","manual"].includes(divider?.mode)) state.divider.mode=divider.mode;
+  if (divider?.length===null || (Number.isInteger(divider?.length) && divider.length>=0 && divider.length<=556)) {
+    state.divider.length=divider.length;
+  }
   if (Number.isInteger(saved?.logoScale) && saved.logoScale>=40 && saved.logoScale<=110) state.logoScale=saved.logoScale;
   for (const role of Object.keys(initial.inks)) {
     const ink=saved?.inks?.[role];
@@ -490,11 +497,18 @@ function refresh() {
   const notes=drawQRs(links,theme);
   if(!drawInfo(info,theme)) notes.push("왼쪽 정보가 길어요. 내용을 줄이면 명함 안에 모두 들어갑니다.");
   drawServices(theme);
-  if (dividedLayout) {
+  const autoLength=Math.min(477,contacts.reduce((sum,f)=>sum+hitBoxes.get(f.id).height,0)+Math.max(0,contacts.length-1)*8);
+  const divider=state.divider;
+  const length=divider.mode==="auto" ? autoLength : (divider.length ?? autoLength);
+  dividerShow.checked=divider.visible;
+  dividerMode.value=divider.mode;
+  dividerMode.disabled=!divider.visible;
+  dividerLength.value=length;
+  dividerLength.disabled=!divider.visible || divider.mode==="auto";
+  if (dividedLayout && divider.visible && length>0) {
     back.save();
     back.globalAlpha=.72;
     back.fillStyle=theme.accent;
-    const length=Math.min(477,contacts.reduce((sum,f)=>sum+hitBoxes.get(f.id).height,0)+Math.max(0,contacts.length-1)*8);
     back.fillRect(dividerX,556-length,4,length);
     back.restore();
   }
@@ -906,6 +920,14 @@ qrScaleInput.addEventListener("input",()=>{
   refresh();
 });
 byId("accent-default").addEventListener("click",()=>{state.inks.label=null;refresh();});
+const dividerShow=byId("divider-show"), dividerMode=byId("divider-mode"), dividerLength=byId("divider-length");
+dividerShow.addEventListener("change",()=>{state.divider.visible=dividerShow.checked;refresh();});
+dividerMode.addEventListener("change",()=>{
+  state.divider.mode=dividerMode.value;
+  if (state.divider.mode==="manual" && state.divider.length===null) state.divider.length=Number(dividerLength.value);
+  refresh();
+});
+dividerLength.addEventListener("input",()=>{state.divider.length=Number(dividerLength.value);refresh();});
 const numericPairs=[];
 for (const slider of document.querySelectorAll('input[type="range"]')) {
   const row=slider.closest(".qr-scale");
@@ -917,7 +939,7 @@ for (const slider of document.querySelectorAll('input[type="range"]')) {
   number.type="number";number.inputMode="numeric";number.id=slider.id+"-number";
   number.min=slider.min;number.max=slider.max;number.step=slider.step||"1";
   number.setAttribute("aria-label",row.querySelector("label").textContent+" 숫자 입력");
-  wrapper.append(number,slider.id.endsWith("-gap")?"px":"%");
+  wrapper.append(number,slider.dataset.unit || (slider.id.endsWith("-gap")?"px":"%"));
   output.after(wrapper);
   function commit(final) {
     const v=number.valueAsNumber;
@@ -937,6 +959,7 @@ const positionTarget=byId("position-target");
 positionTarget.replaceChildren(...fields.map(f=>new Option(f.label,f.id)));
 function syncNumericControls() {
   for (const {slider,number} of numericPairs) {
+    number.disabled=slider.disabled;
     if (document.activeElement!==number) number.value=slider.value;
   }
   for (const option of positionTarget.options) option.disabled=!hitBoxes.has(option.value);
