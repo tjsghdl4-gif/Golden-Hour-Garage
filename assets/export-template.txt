@@ -223,6 +223,10 @@ figcaption button { padding:6px 10px; font-size:12px }
 <fieldset><legend>매장 정보</legend><div id="info-controls"></div><p class="note">↑·↓로 카드에 표시될 순서를 바꿀 수 있습니다.</p></fieldset>
 <fieldset><legend>기본정보 제목과 값 사이 간격</legend><div id="field-gaps"></div><p class="note">각 항목의 제목 표시는 체크로 선택합니다. 제목을 숨기면 간격은 값의 왼쪽 여백으로 적용됩니다.</p></fieldset>
 <fieldset><legend>QR 코드</legend><div id="qr-controls"></div><label class="font-picker">인스타 위치<select id="dock-instagram"><option value="auto">자동</option><option value="top">상단</option><option value="middle">중단</option><option value="bottom">하단</option><option value="manual" disabled>직접 이동</option></select></label><label class="font-picker">블로그 위치<select id="dock-blog"><option value="auto">자동</option><option value="top">상단</option><option value="middle">중단</option><option value="bottom">하단</option><option value="manual" disabled>직접 이동</option></select></label><div class="qr-scale"><label for="qr-scale">QR 크기</label><input id="qr-scale" type="range" min="65" max="120" step="1" value="100"><output id="qr-scale-value" for="qr-scale">100%</output></div><p class="note">인스타그램 ID 또는 주소와 블로그 주소를 입력하면 QR이 만들어집니다.</p></fieldset>
+<fieldset><legend>정보·QR 구분선</legend>
+<label><input type="checkbox" id="divider-show" checked> 구분선 표시</label>
+<label class="font-picker">길이 방식<select id="divider-mode"><option value="auto">연락처 수에 맞춤</option><option value="manual">직접 지정</option></select></label>
+<div class="qr-scale"><label for="divider-length">선 길이</label><input id="divider-length" type="range" min="0" max="556" step="1" data-unit="px"><output for="divider-length"></output></div></fieldset>
 <fieldset><legend>뒷면 위치 (px)</legend><label class="font-picker">조절 항목<select id="position-target"></select></label>
 <div class="coordinate-pair"><label>가로 X <input id="position-x" type="number" step="1" inputmode="numeric"></label><label>세로 Y <input id="position-y" type="number" step="1" inputmode="numeric"></label></div></fieldset>
 </aside>
@@ -2574,6 +2578,7 @@ const initial = {
   design:"engraved",
   language:"ko",
   qrScale:100,
+  divider:{visible:true,mode:"auto",length:null},
   docks:{instagram:"auto",blog:"auto"},
   inks:{shop:"#f3e3c4",label:null,value:"#f3e3c4"},
   logoScale:100,
@@ -2591,6 +2596,12 @@ const published=JSON.parse(document.getElementById("published-settings").textCon
 const storageKey = "golden-hour-garage-editor-v1"+(published.version ? "-"+published.version : "");
 function applySettings(saved) {
   if (saved && Object.prototype.hasOwnProperty.call(designSettings,saved.design)) state.design = saved.design;
+  const divider=saved?.divider;
+  if (typeof divider?.visible==="boolean") state.divider.visible=divider.visible;
+  if (["auto","manual"].includes(divider?.mode)) state.divider.mode=divider.mode;
+  if (divider?.length===null || (Number.isInteger(divider?.length) && divider.length>=0 && divider.length<=556)) {
+    state.divider.length=divider.length;
+  }
   if (Number.isInteger(saved?.logoScale) && saved.logoScale>=40 && saved.logoScale<=110) state.logoScale=saved.logoScale;
   for (const role of Object.keys(initial.inks)) {
     const ink=saved?.inks?.[role];
@@ -3028,11 +3039,18 @@ function refresh() {
   const notes=drawQRs(links,theme);
   if(!drawInfo(info,theme)) notes.push("왼쪽 정보가 길어요. 내용을 줄이면 명함 안에 모두 들어갑니다.");
   drawServices(theme);
-  if (dividedLayout) {
+  const autoLength=Math.min(477,contacts.reduce((sum,f)=>sum+hitBoxes.get(f.id).height,0)+Math.max(0,contacts.length-1)*8);
+  const divider=state.divider;
+  const length=divider.mode==="auto" ? autoLength : (divider.length ?? autoLength);
+  dividerShow.checked=divider.visible;
+  dividerMode.value=divider.mode;
+  dividerMode.disabled=!divider.visible;
+  dividerLength.value=length;
+  dividerLength.disabled=!divider.visible || divider.mode==="auto";
+  if (dividedLayout && divider.visible && length>0) {
     back.save();
     back.globalAlpha=.72;
     back.fillStyle=theme.accent;
-    const length=Math.min(477,contacts.reduce((sum,f)=>sum+hitBoxes.get(f.id).height,0)+Math.max(0,contacts.length-1)*8);
     back.fillRect(dividerX,556-length,4,length);
     back.restore();
   }
@@ -3444,6 +3462,14 @@ qrScaleInput.addEventListener("input",()=>{
   refresh();
 });
 byId("accent-default").addEventListener("click",()=>{state.inks.label=null;refresh();});
+const dividerShow=byId("divider-show"), dividerMode=byId("divider-mode"), dividerLength=byId("divider-length");
+dividerShow.addEventListener("change",()=>{state.divider.visible=dividerShow.checked;refresh();});
+dividerMode.addEventListener("change",()=>{
+  state.divider.mode=dividerMode.value;
+  if (state.divider.mode==="manual" && state.divider.length===null) state.divider.length=Number(dividerLength.value);
+  refresh();
+});
+dividerLength.addEventListener("input",()=>{state.divider.length=Number(dividerLength.value);refresh();});
 const numericPairs=[];
 for (const slider of document.querySelectorAll('input[type="range"]')) {
   const row=slider.closest(".qr-scale");
@@ -3455,7 +3481,7 @@ for (const slider of document.querySelectorAll('input[type="range"]')) {
   number.type="number";number.inputMode="numeric";number.id=slider.id+"-number";
   number.min=slider.min;number.max=slider.max;number.step=slider.step||"1";
   number.setAttribute("aria-label",row.querySelector("label").textContent+" 숫자 입력");
-  wrapper.append(number,slider.id.endsWith("-gap")?"px":"%");
+  wrapper.append(number,slider.dataset.unit || (slider.id.endsWith("-gap")?"px":"%"));
   output.after(wrapper);
   function commit(final) {
     const v=number.valueAsNumber;
@@ -3475,6 +3501,7 @@ const positionTarget=byId("position-target");
 positionTarget.replaceChildren(...fields.map(f=>new Option(f.label,f.id)));
 function syncNumericControls() {
   for (const {slider,number} of numericPairs) {
+    number.disabled=slider.disabled;
     if (document.activeElement!==number) number.value=slider.value;
   }
   for (const option of positionTarget.options) option.disabled=!hitBoxes.has(option.value);
